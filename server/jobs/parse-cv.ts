@@ -19,8 +19,10 @@ export function makeParseCv() {
   return getInngest().createFunction(
     { id: 'parse-cv', retries: 3, triggers: [{ event: 'cv/uploaded' }] },
     async ({ event, step }) => {
-      const { userId, blobUrl, version } = event.data as {
+      const { userId, documentId, blobUrl, version } = event.data as {
         userId: string
+        /** uuid de `documents.id` (PAS un pathname Blob) — pour poser parsedAt en F4. */
+        documentId: string
         blobUrl: string
         version: number
       }
@@ -29,6 +31,7 @@ export function makeParseCv() {
         // STUB : on logge juste la réception. F4 fera le vrai parsing.
         console.info('[parse-cv] CV reçu, parsing en attente (F4)', {
           userId,
+          documentId,
           blobUrl,
           version,
         })

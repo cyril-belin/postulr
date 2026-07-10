@@ -109,23 +109,35 @@ export default defineEventHandler(async (event) => {
         .limit(1)
       const version = nextVersion(latest?.version ?? 0)
 
-      await db.insert(documents).values({
+      // `.returning()` récupère l'id uuid réel de la ligne insérée (Drizzle +
+      // Postgres). On l'émet dans l'event `cv/uploaded` pour que F4 puisse
+      // poser `parsedAt` directement sur la bonne ligne SANS re-résoudre par
+      // blobUrl (fragile, faux si deux lignes partagent un pathname historique).
+      const insertedRows = await db.insert(documents).values({
         userId,
         kind: 'CV',
         blobUrl: blob.url,
         version,
         parsedAt: null,
-      })
+      }).returning({ id: documents.id })
+      const documentId = insertedRows[0]?.id
+      if (!documentId) {
+        // Anomalie : insert sans ligne retournée (contrainte DB, DB down).
+        // On logge et lève (500 → Blob retry l'onUploadCompleted complet).
+        console.error('[cv/upload] insert sans returning', { blobUrl: blob.url, userId })
+        throw new Error('documents insert returned no row')
+      }
 
       // Gating (correctif vs F2) : le middleware cv-required lit users.hasCv,
       // PAS l'existence d'une ligne documents. C'est ici qu'on pose hasCv=true.
       await db.update(users).set({ hasCv: true }).where(eq(users.id, userId))
 
       // Déclenche le parsing (stub F4 — no-op loggé pour l'instant).
+      // documentId = uuid documents.id (PAS blob.pathname qui n'est pas un id).
       try {
         await getInngest().send({
           name: 'cv/uploaded',
-          data: { userId, documentId: blob.pathname, blobUrl: blob.url, version },
+          data: { userId, documentId, blobUrl: blob.url, version },
         })
       } catch (err) {
         // L'event Inngest peut échouer sans invalider l'upload (le CV est stocké).
