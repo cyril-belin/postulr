@@ -69,11 +69,12 @@ variante dark automatique. Le toggle sera branché en F2 (color-mode).
 
 ---
 
-## 3. Primitives installées (F1)
+## 3. Primitives installées (F1 + F2)
 
-Quatre primitives posées en F1. Tout le reste du UI se compose à partir de
-celles-ci + des primitives ajoutées feature par feature (Chaque ajout via
-`npx shadcn-vue add <name>`, jamais écrit à la main).
+Six primitives (Button, Card, Input, Label en F1 ; Checkbox, Sonner en F2).
+Tout le reste du UI se compose à partir de celles-ci + des primitives ajoutées
+feature par feature (Chaque ajout via `npx shadcn-vue add <name>`, jamais écrit
+à la main).
 
 ### 3.1 `Button`
 
@@ -207,7 +208,42 @@ Last updated: 2026-07-10
 
 **Pattern notes :** Reka UI `Label` (a11y native). Toujours `text-sm font-medium`. S'associe au peer (Input) pour l'état disabled.
 
-### 3.5 — Layouts & landing (propriétés de cohérence)
+### 3.5 — Checkbox (propriétés de cohérence)
+
+File: `app/components/ui/checkbox/Checkbox.vue`
+Last updated: 2026-07-10 (F2)
+
+| Property | Class |
+| --- | --- |
+| Size | `size-4` (carré) |
+| Border | `border-input` (unchecked) |
+| Checked bg | `data-checked:bg-primary data-checked:border-primary` |
+| Checked text | `data-checked:text-primary-foreground` |
+| Border radius | `rounded-[4px]` (note : légèrement plus petit que `rounded-md`) |
+| Focus | `focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3` |
+| Invalid | `aria-invalid:border-destructive aria-invalid:ring-destructive/20` |
+| Disabled | `disabled:cursor-not-allowed disabled:opacity-50` |
+| Indicator icon | `size-3.5` (CheckIcon centré) |
+
+**Pattern notes :** Reka UI `CheckboxRoot` (a11y native). `v-model` via `modelValue`/`update:modelValue`. Taille fixe `size-4`. Le focus `ring-3` est cohérent avec Button/Input. Utilisé dans l'onboarding pour les consentements RGPD, associé à un `<Label for=...>`.
+
+### 3.6 — Sonner / Toaster (propriétés de cohérence)
+
+File: `app/components/ui/sonner/Sonner.vue` (wrapper `vue-sonner` `Toaster`)
+Last updated: 2026-07-10 (F2)
+
+| Property | Value |
+| --- | --- |
+| Toast background | `var(--popover)` (`--normal-bg`) |
+| Toast text | `var(--popover-foreground)` (`--normal-text`) |
+| Toast border | `var(--border)` (`--normal-border`) |
+| Toast radius | `rounded-2xl` (via `toastOptions.classes.toast`) |
+| Icons | Lucide (`CircleCheckIcon`, `InfoIcon`, `TriangleAlertIcon`, `OctagonXIcon`, `Loader2Icon`, `XIcon`) à `size-4` |
+| Montage | global dans `app/app.vue` (`<Sonner />`) |
+
+**Pattern notes :** Toaster monté **une fois** au niveau racine (`app.vue`). Pour déclencher un toast depuis n'importe où : `import { toast } from 'vue-sonner'` puis `toast.success('...')` / `toast.error('...')`. Le composant fusionne `toastOptions` (props passées) avec les classes par défaut pour éviter le conflit de double binding. Couleurs via tokens sémantiques (popover, pas background).
+
+### 3.7 — Layouts & landing (propriétés de cohérence)
 
 Files: `app/layouts/default.vue`, `app/layouts/auth.vue`, `app/pages/index.vue`, `app/error.vue`
 Last updated: 2026-07-10
@@ -252,3 +288,6 @@ Last updated: 2026-07-10
 - **2026-07-10 (F1)** — Initialisation. Tokens neutral + Tailwind v4 CSS-first
   + primitives Button, Card (+6), Input, Label. Layouts default + auth. Landing
   `pages/index.vue`.
+- **2026-07-10 (F2)** — Primitives Checkbox + Sonner (toasts). Header default.vue
+  enrichi (SignedIn/SignedOut + UserButton). Pages sign-in/sign-up/onboarding/
+  onboarding/upload-cv/dashboard. Sonner monté dans app.vue.
