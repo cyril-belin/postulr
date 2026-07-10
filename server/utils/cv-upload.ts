@@ -32,6 +32,14 @@ export interface UploadValidation {
  *   2. Content-type dans l'allowliste (PDF uniquement).
  *   3. Taille ≤ 5 Mo.
  *
+ * ⚠️ Sémantique de `undefined` — UN seul contrat pour `contentType` ET
+ * `sizeInBytes` : `undefined` = « non vérifiable à ce stade, enforcement
+ * délégué à Blob ». C'est le cas dans `onBeforeGenerateToken` (le fichier n'a
+ * pas encore été uploadé, on n'en connaît ni le type ni la taille). Le rejet
+ * (400/413) ne s'applique qu'à une valeur EXPLICITE hors cadre. C'est sûr car
+ * Blob enforce réellement via `allowedContentTypes`/`maximumSizeInBytes`
+ * (renvoyés par le callback — le client ne peut pas les forger).
+ *
  * @returns `{ ok: true }` ou `{ ok: false, statusCode, statusMessage }`.
  */
 export function validateUploadRequest(params: {
@@ -42,7 +50,9 @@ export function validateUploadRequest(params: {
   if (!params.userId) {
     return { ok: false, statusCode: 401, statusMessage: 'Unauthorized' }
   }
-  if (!params.contentType || !CV_ALLOWED_CONTENT_TYPES.includes(params.contentType)) {
+  // Rejet uniquement si une valeur EXPLICITE est hors allowlist. `undefined`
+  // = non connu à ce stade → enforcement délégué à Blob (cf. JSDoc).
+  if (params.contentType !== undefined && !CV_ALLOWED_CONTENT_TYPES.includes(params.contentType)) {
     return { ok: false, statusCode: 400, statusMessage: 'Seuls les fichiers PDF sont acceptés.' }
   }
   if (params.sizeInBytes !== undefined && params.sizeInBytes > CV_MAX_SIZE_BYTES) {

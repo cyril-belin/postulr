@@ -35,7 +35,7 @@ describe('validateUploadRequest — garde d\'authentification', () => {
 })
 
 describe('validateUploadRequest — allowlist content-type', () => {
-  it('rejette un content-type non-PDF (400)', () => {
+  it('rejette un content-type explicite non-PDF (400)', () => {
     const res = validateUploadRequest({
       userId: 'user_abc',
       contentType: 'image/png',
@@ -45,10 +45,14 @@ describe('validateUploadRequest — allowlist content-type', () => {
     expect(res.statusCode).toBe(400)
   })
 
-  it('rejette un content-type absent (400)', () => {
+  it('accepte un content-type absent — enforcement délégué à Blob (undefined = non connu)', () => {
+    // Nouveau contrat (corrige le bloquant review externe PR #2) : `undefined`
+    // = non vérifiable à ce stade (onBeforeGenerateToken ne connaît pas encore
+    // le type du fichier). L'allowlist est enforced côté Blob via
+    // allowedContentTypes (que le client ne peut pas forcer). Le rejet 400 ne
+    // s'applique qu'à une valeur EXPLICITE hors allowlist.
     const res = validateUploadRequest({ userId: 'user_abc', contentType: undefined, sizeInBytes: 1000 })
-    expect(res.ok).toBe(false)
-    expect(res.statusCode).toBe(400)
+    expect(res.ok).toBe(true)
   })
 
   it('accepte uniquement application/pdf', () => {
@@ -101,5 +105,39 @@ describe('nextVersion — incrément de version CV', () => {
   it('version jamais négative ni nulle', () => {
     expect(nextVersion(0)).toBeGreaterThanOrEqual(1)
     expect(nextVersion(10)).toBe(11)
+  })
+})
+
+/**
+ * Test du CALL SITE réel (corrige le bloquant review externe PR #2).
+ *
+ * Tester la fonction isolément ne suffit pas — il faut aussi tester l'appel
+ * TEL QUE le code de prod le fait. `onBeforeGenerateToken` dans
+ * /api/cv/upload.post.ts appelle `validateUploadRequest` avec EXACTEMENT
+ * `{ userId, contentType: undefined, sizeInBytes: undefined }` (le fichier
+ * n'est pas encore uploadé à ce stade). Avant le fix, ce call site renvoyait
+ * systématiquement `{ ok: false, 400 }` → aucun upload n'était possible.
+ *
+ * Ce test protège la composition route ↔ garde, pas la fonction seule.
+ */
+describe('validateUploadRequest — call site réel (onBeforeGenerateToken)', () => {
+  it('accepte les arguments exacts que la route passe (userId + undefined/undefined)', () => {
+    const res = validateUploadRequest({
+      userId: 'user_abc',
+      contentType: undefined,
+      sizeInBytes: undefined,
+    })
+    expect(res.ok).toBe(true)
+  })
+
+  it('rejette le call site sans userId (401, garde d\'auth)', () => {
+    // userId null = event.context.auth() sans session valide.
+    const res = validateUploadRequest({
+      userId: null,
+      contentType: undefined,
+      sizeInBytes: undefined,
+    })
+    expect(res.ok).toBe(false)
+    expect(res.statusCode).toBe(401)
   })
 })
