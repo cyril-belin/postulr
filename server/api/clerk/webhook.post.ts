@@ -1,5 +1,6 @@
 import { Webhook } from 'svix'
 import { users } from '#server/schema/users'
+import { noEmailDecision, webhookGuard } from '#server/utils/webhook-guard'
 
 /**
  * Webhook Clerk (F2 §2) — signature Svix vérifiée obligatoirement.
@@ -29,26 +30,38 @@ export default defineEventHandler(async (event) => {
 
   // 1. Lire le raw body (requis pour Svix).
   const rawBody = await readRawBody(event)
-  if (!rawBody) {
-    throw createError({ statusCode: 400, statusMessage: 'Empty body' })
-  }
 
-  // 2. Headers Svix — requis pour la vérif. Manquants → 401.
+  // 2. Headers Svix — requis pour la vérif.
   const svixId = getRequestHeader(event, 'svix-id')
   const svixTimestamp = getRequestHeader(event, 'svix-timestamp')
   const svixSignature = getRequestHeader(event, 'svix-signature')
-  if (!svixId || !svixTimestamp || !svixSignature) {
+
+  // Gardes de sécurité (extraction backlog F2 #2 — fonction pure partagée avec
+  // les tests). Aucune écriture base ne peut survenir si un garde échoue.
+  const guardCode = webhookGuard(rawBody, {
+    'svix-id': svixId,
+    'svix-timestamp': svixTimestamp,
+    'svix-signature': svixSignature,
+  })
+  if (guardCode === 400) {
+    throw createError({ statusCode: 400, statusMessage: 'Empty body' })
+  }
+  if (guardCode === 401) {
     throw createError({ statusCode: 401, statusMessage: 'Missing Svix headers' })
   }
+
+  // À ce stade, webhookGuard garantit rawBody + headers Svix définis (sinon
+  // 400/401 ci-dessus). TS ne le déduit pas → assertions.
+  const verifiedBody = rawBody as string
 
   // 3. Vérifier la signature. `new Webhook(secret)` puis `.verify()`.
   let payload: ClerkWebhookEvent
   try {
     const wh = new Webhook(config.clerkWebhookSecret)
-    payload = wh.verify(rawBody, {
-      'svix-id': svixId,
-      'svix-timestamp': svixTimestamp,
-      'svix-signature': svixSignature,
+    payload = wh.verify(verifiedBody, {
+      'svix-id': svixId!,
+      'svix-timestamp': svixTimestamp!,
+      'svix-signature': svixSignature!,
     }) as ClerkWebhookEvent
   } catch {
     // Signature invalide → 401, on ne touche pas à la base.
@@ -68,8 +81,10 @@ export default defineEventHandler(async (event) => {
     // Pas d'email = OAuth incomplet ou email non vérifié. On accuse réception
     // (200) sans écrire : Clerk renverra user.updated quand l'email sera posé.
     // Un 400 déclencherait une retry storm infinie (review F2 issue #6).
+    // Logique extraite (backlog F2 #2) — partagée avec les tests.
     if (!email) {
-      return { received: true, ignored: 'no-email' }
+      const decision = noEmailDecision(false)
+      return { received: true, ignored: decision.ignored }
     }
 
     try {

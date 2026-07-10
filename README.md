@@ -72,3 +72,45 @@ NUXT_CLERK_WEBHOOK_SECRET=whsec_...
 | `npm run test` | Vitest |
 | `npm run db:generate` | Générer une migration Drizzle |
 | `npm run db:migrate` | Appliquer les migrations |
+
+## Configuration Vercel Blob (F3 — upload CV)
+
+Le stockage des CV utilise [Vercel Blob](https://vercel.com/docs/vercel-blob) en
+**accès privé** (décision SCOPING §3.2 : les CV sont des PII sensibles, posture
+RGPD-strict). Le `BLOB_READ_WRITE_TOKEN` est dans `.env`.
+
+- Le store Blob doit être **privé** (souvent Vercel Pro). Les lectures passent
+  par des URLs signées à courte durée délivrées par `GET /api/cv/download`.
+- L'upload est **direct navigateur → Blob** (`@vercel/blob/client`), orchestré
+  par `POST /api/cv/upload` (`handleUpload` + `onBeforeGenerateToken`/`onUploadCompleted`).
+
+### Dev local — webhook `onUploadCompleted` (tunnel requis)
+
+⚠️ **Critique** : `onUploadCompleted` (qui persiste le CV en base + pose
+`hasCv=true` + déclenche le parsing) est un **webhook appelé par les serveurs
+Vercel**. Il ne peut PAS atteindre `localhost` directement. Sans tunnel,
+l'upload aboutit côté Blob mais **aucune ligne `documents` n'est créée** et
+`hasCv` reste `false`.
+
+Procédure :
+
+```bash
+# 1. Lancer un tunnel vers localhost:3000
+ngrok http 3000   # ou cloudflared, voir alternatives Vercel Blob
+
+# 2. Récupérer l'URL HTTPS (ex. https://abc.ngrok.app)
+
+# 3. Configurer Vercel Blob pour utiliser cette URL comme callback.
+#    Via la variable d'environnement (au boot du serveur Nuxt) :
+#    VERCEL_BLOB_CALLBACK_URL=https://abc.ngrok.app/api/cv/upload
+#    (Blob l'utilise comme base pour le callback onUploadCompleted)
+```
+
+Vérifier dans l'[onglet Blob du dashboard Vercel](https://vercel.com/dashboard)
+que le callback est bien reçu après un upload de test.
+
+### Variables d'environnement
+
+```
+NUXT_BLOB_READ_WRITE_TOKEN=vercel_blob_rw_...
+```

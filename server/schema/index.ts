@@ -3,3 +3,4 @@
 // Importé via `#server/schema` dans les routes, ou passé au client `db` pour
 // activer les relational queries.
 export * from './users'
+export * from './documents'

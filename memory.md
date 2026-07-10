@@ -1,112 +1,108 @@
-# Memory — F2 Auth Clerk + corrections post-review externe
+# Memory — F3 Upload CV + storage Vercel Blob
 
 Last updated: 2026-07-10
 
 ## What was built
 
-F2 (auth Clerk + gating onboarding) terminée, **review interne passé (9 issues
-corrigées) + corrections d'une review externe (3 points) appliquées**. Branche
-`F2-auth-clerk` **mergée sur main** (PR #1 squash-merge, branche supprimée).
+F3 (Upload CV + storage Vercel Blob PRIVÉ) terminée, **quality gate full vert**
+(typecheck ✓, eslint ✓ 0 warning, vitest 32/32 ✓, build ✓), **`/review` passé**
+(review : 6 issues, #4 idempotence webhook corrigée + #1 clarification throw).
+Branche `F3-upload-cv` **pushée, PR #2 ouverte vers main — ne pas merger,
+part en review externe**.
 
-Voir les commits détaillés pour le détail de F2 (auth, webhook, middlewares,
-pages, onboarding RGPD, job delete-user-cascade squelette). Récap rapide :
-module `@clerk/nuxt` (auto-configuré, **PAS de plugin client manuel** —
-décision actée doc Clerk), webhook Svix signé, consentements RGPD, middlewares
-auth/cv-required, `users.hasCv` (migration 0001).
+Fichiers créés / modifiés :
+- `server/schema/documents.ts` (table documents, kind='CV', blobUrl UNIQUE)
+- `server/utils/storage/` (types.ts, vercel-blob.ts, index.ts — abstraction)
+- `server/utils/quota.ts` (stub, interface stable pour F10)
+- `server/utils/cv-upload.ts` (validateUploadRequest, nextVersion, deleteBlobsBestEffort)
+- `server/utils/webhook-guard.ts` (extraction backlog F2 #2)
+- `app/utils/cv-redirect.ts` (extraction backlog F2 #2)
+- `server/api/cv/upload.post.ts` (handleUpload), `download.get.ts` (URL signée),
+  `index.get.ts` (liste versions)
+- `server/jobs/parse-cv.ts` (stub F4) + `delete-user-cascade.ts` étendu (delete blobs)
+- `app/components/cv/CvUpload.vue` (dropzone + progress + états)
+- `app/pages/onboarding/upload-cv.vue` (réel, remplace placeholder F2)
+- `app/pages/dashboard/index.vue` (section « Mes CV »)
+- Primitives shadcn : Progress + AlertDialog (ajoutées via CLI)
+- Migrations `db/0002_aromatic_warstar.sql` + `db/0003_strange_kingpin.sql`
 
-## Corrections review externe (3, cette session)
+## Decisions made (cette session)
 
-1. **Self-host Geist (RGPD + bug)** — `app/assets/css/tailwind.css` importait
-   Geist via `@import url('https://fonts.googleapis.com/...')` (transmet l'IP
-   visiteur à Google sans consentement — incompatible SCOPING §3.6) ET avec un
-   family mismatch (`@import` chargeait `Geist`, token déclarait `Geist Variable`
-   → fallback silencieux). Fix: package `@fontsource-variable/geist` self-hosté,
-   `@import "@fontsource-variable/geist"` dans le CSS, suppression de l'import
-   Google. Family alignée (`'Geist Variable'` — confirmé via le CSS du package).
-   **Vérif visuelle Playwright**: `getComputedStyle(h1).fontFamily` =
-   `"Geist Variable", sans-serif`, `document.fonts.check()` = true, police bien
-   rendue (pas le fallback).
-2. **`jsdom` supprimé** des devDependencies (relicat d'essai ; `happy-dom` est
-   l'env requis par @nuxt/test-utils). Aucune référence source.
-3. **Ligne obsolète `clerk.client.ts` purgée** — la memory F1 mentionnait
-   « brancher le plugin client clerk.client.ts ». Déjà absente de la memory
-   post-review F2 ; la décision (auto-configuration par le module, **pas de
-   plugin manuel**) est documentée ici explicitement pour éviter toute rechute.
-
-`.gitignore`: `.playwright-mcp/` ajouté (artefact de test Playwright).
-
-## Decisions made
-
-- **Clerk = auto-configuration, PAS de plugin client manuel** (`app/plugins/
-  clerk.client.ts` à NE PAS créer). Le module `@clerk/nuxt` s'auto-configure
-  (middleware + plugins + composants auto-importés). Décision doc Clerk Nuxt
-  vérifiée 2026-07-10.
-- **`<SignedIn>`/`<SignedOut>` et NON `<Show>`** (primitive Next.js).
-- **Geist self-hosté** via `@fontsource-variable/geist` — jamais de Google Fonts
-  CDN (RGPD). Family = `'Geist Variable'`.
-- **API Clerk SDK v3 renommages**: `afterSignInUrl` → `signInFallbackRedirectUrl`.
-  `event.context.auth()` est une FONCTION.
-- **Tests server routes = logique pure** (env Nuxt Vitest ne sert pas les routes
-  via `$fetch`). Intégration Clerk complète = Playwright en F10.
-- **Webhook sémantique codes**: 401=signature invalide (pas retry), 200=ack (même
-  ignoré, anti retry-storm), 500=erreur transitoire (retry, loggé).
-- **Ordre AGENTS §8 NON NÉGOCIABLE**: /review AVANT /remember save (qui est
-  TOUJOURS en dernier).
+- **Blob PRIVÉ + URLs signées courte durée** (SCOPING §3.2). Capacité confirmée
+  doc officielle Vercel Blob 2026-07-10 : Private Blob est GA, lectures via
+  `issueSignedToken` + `presignUrl(operation:'get')`. Le `blobUrl` brut n'est
+  JAMAIS renvoyé au client (download délivre URL signée 60s). Prérequis : store
+  Blob privé (souvent Vercel Pro) — à valider en intégration.
+- **Consents APPEND-ONLY** (backlog F2 #1). PAS de contrainte unique
+  (userId,type). Journal d'audit complet de l'historique des consentements
+  (exigence RGPD). /api/me prend la ligne la plus récente par type.
+- **`handleUpload` ↔ Nitro** : `handleUpload` est conçue pour Next (attend un
+  Web Request). On adapte l'event H3 via `toWebRequest(event)`. Import depuis
+  `@vercel/blob/client` (PAS `@vercel/blob`).
+- **Idempotence `onUploadCompleted`** : check blobUrl existant + contrainte
+  UNIQUE DB (le webhook Blob peut être réessayé → doublon sinon).
+- **`tokenPayload`** : comment le userId passe de `onBeforeGenerateToken`
+  (requête auth user, a `event.context.auth()`) à `onUploadCompleted` (webhook
+  Blob, PAS de session Clerk). `JSON.stringify({userId})` posé dans tokenPayload,
+  lu côté webhook.
+- **`components.json` `"font": ""`** : pour empêcher `shadcn-vue add` de
+  réinjecter l'import Google Fonts Geist (régression RGPD détectée+corrigée).
 
 ## Problems solved
 
-- **Geist RGPD + mismatch**: self-host via fontsource, family alignée.
-- **vitest "Missing publishableKey"**: charger `.env` dans `vitest.config.ts`
-  via `dotenv.config()` (plugin client Clerk exige la clé au boot).
-- **Composant Sonner généré TS2783** (toastOptions double binding): `computed(
-  mergedToastOptions)`. Déviation mineure §4.1 (bug généré).
-- **Inngest v4 `createFunction`**: `(options, handler)`, options = `{id,
-  triggers:[{event}], retries}`.
-- **Webhook retry-storm (#6 review interne)**: user sans email → 200 ack pas 400.
+- **Régression Geist RGPD** : `shadcn-vue add progress alert-dialog` a réinjecté
+  `@import url('https://fonts.googleapis.com/...')` dans tailwind.css (le
+  `components.json` `"font": "geist-sans"` le déclenche). Corrigé : import
+  supprimé + `components.json` `"font": ""` pour prévenir la récidive.
+- **Import dupliqué StorageProvider/StorageError** : Nitro auto-importe depuis
+  types.ts ET index.ts → ne PAS ré-exporter depuis index.ts (warning typecheck).
+- **handleUpload import path** : `@vercel/blob/client`, pas `@vercel/blob`.
+- **TS narrowing après guard externe** : `validateUploadRequest` retourne ok/false
+  mais TS ne narrow pas userId → assertion `userId!` après le guard.
 
 ## Current state
 
-- **Quality gate FULL VERT après corrections externes:** typecheck ✓, eslint ✓
-  (0 warning), vitest 13/13 ✓, build ✓.
-- **Graph régénéré** (`/graphify .`): 278 nœuds, 281 edges, 51 communities.
-- **Live vérifié:** Geist rendue correctement (Playwright getComputedStyle).
-  Routes auth catch-all vérifiées (sso-callback 200, plus de 404).
-- **F2 mergée sur main** (PR #1, commit `3815bd7`). Branche `F2-auth-clerk`
-  supprimée (locale + remote).
+- **Quality gate FULL VERT.** typecheck ✓, eslint ✓ (0 warning), vitest 32/32 ✓,
+  build ✓.
+- **Graph régénéré** (`/graphify . --code-only`) : 380 nœuds, 383 edges,
+  64 communities.
+- **`/review` passé** (6 issues : #1 clarification throw intentional, #4
+  idempotence webhook corrigée avec contrainte UNIQUE + check applicatif).
+- **`/imprint` fait** : Progress (§3.7), AlertDialog (§3.8), CvUpload (§4.1)
+  dans ui-registry.md.
+- **PR #2 ouverte** (F3-upload-cv → main). Ne pas merger, review externe d'abord.
 
 ## Next session starts with
 
 1. **`/remember restore`**.
-2. **⚠️ PRÉREQUIS F3 (manuel, bloquant)** — à faire AVANT de démarrer F3 :
-   - **(a) Configuration Clerk Dashboard** (README § "Configuration Clerk
-     Dashboard"): providers Google/email, endpoint webhook
-     `https://postulr.online/api/clerk/webhook`, events `user.created/updated/
-     deleted`, récupérer `NUXT_CLERK_WEBHOOK_SECRET` → `.env`.
-   - **(b) Test signup réel**: créer un compte via l'UI en local (avec tunnel
-     webhook) → valider que la ligne `users` apparaît en base. Sans webhook, les
-     users Clerk ne sont pas créés en DB → F3 cassé.
-   - **(c) Décision RGPD Vercel Blob** à trancher en ouverture F3 (SCOPING §3.2
-     + §5): Blob privé + URLs signées vs Blob public. Vérifier capacité Blob
-     privé via doc officielle Vercel Blob au moment de F3.
-4. **Démarrer F3 (Upload CV + storage)** → `prompts/F3-*.md`. Premier sous-
-   objectif: abstraction `StorageProvider`, flux upload direct navigateur →
-   Vercel Blob (AGENTS §5.2), passe `users.hasCv` à true.
+2. **Attendre le retour de la review externe de PR #2** puis appliquer les
+   corrections éventuelles + merger.
+3. **⚠️ PRÉREQUIS F3 intégration (manuel, bloquant pour valider les critères
+   d'acceptation #1/#4)** : configurer le store Vercel Blob **privé** (Vercel
+   Pro), poser `NUXT_BLOB_READ_WRITE_TOKEN`, tunnel ngrok pour le webhook
+   `onUploadCompleted`, tester un upload réel (PDF < 5Mo) → valider ligne
+   documents + hasCv=true + event cv/uploaded dans Inngest dev server.
+4. **Démarrer F4 (Parsing CV par IA)** → `prompts/F4-*.md`. Le stub `parse-cv`
+  (server/jobs/parse-cv.ts) existe déjà et est registered. Premier sous-objectif :
+  récupérer le PDF via URL signée, appeler LlmProvider (à créer en F4), valider
+  sortie Zod, persister profil, poser `documents.parsedAt`.
 
-## Open questions / TODO pour F3+
+## Open questions / TODO pour F4+
 
-- **Tests routes serveur = logique pure (backlog important)** : les tests webhook/
-  account-delete/cv-required testent des fonctions pures extraites, PAS le vrai
-  code des handlers. Couverture réelle faible. Envisager `setup()` @nuxt/test-utils
-  (boot serveur → `$fetch` sur les vraies routes) quand le volume augmente, ou
-  Playwright F10 pour les flux auth complets.
-- **Idempotence consents à trancher en F3** : `POST /api/onboarding/consents`
-  insère une nouvelle ligne `consents` à chaque appel (re-submit onboarding =
-  doublons). Décider en F3 : upsert/unique(userId,type) ou insertion append-only
-  (audit trail) ? Selon le besoin RGPD (historique des consentements vs dernier
-  état). Actuellement append-only sans contrainte unique.
-- Job `delete-user-cascade` squelette: compléter CV Blob (F3) + applications (F7).
-- Composant Sonner modifié (TS2783 fix) — déviation mineure §4.1 documentée.
-- **Pas de plugin Clerk manuel** — règle à respecter en F2+ (le module
-  s'auto-configure).
-- **Routes auth = catch-all Nuxt `[...rest].vue`** (PAS `[[...rest]]` qui est
-  Next.js) — sous dossiers `sign-in/` et `sign-up/` pour les sous-routes Clerk.
+- **Store Blob privé** : à configurer côté Vercel (Pro ?) — `issueSignedToken`
+  échoue si le store est public. Le code est correct quel que soit le mode
+  (download restreint l'accès authentifié = défense en profondeur).
+- **`handleUpload` ↔ Nitro** : `toWebRequest(event)` à confirmer au runtime
+  (testé en build mais pas en intégration live — la route n'est pas testée
+  end-to-end, juste la logique extraite).
+- **Tests routes serveur = logique pure** (backlog persistant) : les routes
+  /api/cv/* ne sont pas testées end-to-end ($fetch sur vraie route), juste les
+  fonctions pures extraites. Couverture réelle route = faible. Inngest dev server
+  + tunnel pour valider en intégration.
+- **Quota stub** : F10 remplacera le corps (fenêtre glissante 30j, free/pro)
+  SANS changer l'interface — aucun code appelant à modifier.
+- **TODO F7** : anonymisation applications dans delete-user-cascade (count sans
+  PII). TODO F4 : impl réelle de parse-cv.
+- **Règle shadcn-vue** : après chaque `npx shadcn-vue add`, vérifier que
+  tailwind.css n'a pas reçu d'import Google Fonts (régression Geist). Le
+  `components.json "font": ""` devrait prévenir, mais à surveiller.

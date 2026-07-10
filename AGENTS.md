@@ -265,11 +265,23 @@ export interface LlmProvider {
 
 // server/utils/storage/types.ts
 export interface StorageProvider {
-  put(key: string, bytes: Buffer, contentType: string): Promise<{ url: string }>
-  get(url: string): Promise<Buffer>
-  delete(url: string): Promise<void>
+  /** Supprime un blob par son URL (RGPD — delete-user-cascade). */
+  delete(blobUrl: string): Promise<void>
+  /** Métadonnées d'un blob (null si absent). */
+  head(blobUrl: string): Promise<{ size: number, contentType: string } | null>
+  /**
+   * URL signée à durée courte pour télécharger un blob privé (SCOPING §3.2).
+   * Appelée par une route authentifiée (ex. /api/cv/download) — jamais le
+   * blobUrl brut n'est exposé au client.
+   */
+  getSignedDownloadUrl(blobUrl: string, expiresInSec?: number): Promise<string>
 }
 // impl: server/utils/storage/vercel-blob.ts
+//
+// Rationale : pas de `put`/`get` — l'upload est direct client → Blob via
+// `handleUpload` (§5.2), le serveur ne reçoit jamais le binaire ; la lecture
+// passe par des URLs signées (mode privé) et non un `get` qui renverrait le
+// buffer (inutile + mémoire serveur).
 
 // server/utils/ats/types.ts
 export interface AtsApplier {

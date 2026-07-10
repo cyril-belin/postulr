@@ -26,6 +26,13 @@ export const users = pgTable('users', {
 })
 
 // --- Consentements RGPD (AGENTS.md §5.8, SCOPING §3.6) ---
+//
+// ⚠️ Journal d'audit APPEND-ONLY (décision backlog F2 — consignée SCOPING §3.6) :
+// on n'impose PAS de contrainte unique (userId, type). Chaque accord/retrait
+// ajoute une ligne, ce qui préserve l'historique complet des consentements
+// (exigence RGPD : pouvoir démontrer qui a consenti à quoi et quand). La
+// lecture de l'état courant prend la ligne la plus récente par type
+// (cf. /api/me qui vérifie la présence d'au moins une ligne de ce type).
 
 export const consents = pgTable(
   'consents',

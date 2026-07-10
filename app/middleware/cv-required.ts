@@ -2,10 +2,10 @@
  * Middleware `cv-required` (named) — connecté mais hasCv=false → redirection
  * vers l'onboarding (F2 §2). S'applique au dashboard via definePageMeta.
  *
- * Logique de redirection :
+ * Logique de redirection (extraction backlog F2 #2 — fonction pure testable
+ * dans app/utils/cv-redirect.ts, importée par les tests = code réel) :
  *   - consents non donnés (cvProcessing false) → /onboarding (écran consentements)
- *   - consents donnés mais hasCv=false → /onboarding/upload-cv (placeholder F2,
- *     vrai upload en F3)
+ *   - consents donnés mais hasCv=false → /onboarding/upload-cv (upload réel F3)
  *
  * Ce middleware suppose que `auth` a déjà tourné (on est authentifié). On
  * attend que le profil DB soit chargé avant de décider (sinon hasCv inconnu).
@@ -15,6 +15,8 @@
  * pour éviter que le middleware ne crash — en cas d'échec, on redirige vers
  * l'onboarding (valeur par défaut sûre) plutôt que de propager une 500.
  */
+import { decideCvRedirect } from '~/utils/cv-redirect'
+
 export default defineNuxtRouteMiddleware(async () => {
   const { isLoaded, isSignedIn } = useAuth()
   const { hasCv, consents, refresh } = useCurrentUser()
@@ -33,10 +35,7 @@ export default defineNuxtRouteMiddleware(async () => {
     return navigateTo('/onboarding')
   }
 
-  if (hasCv.value) return // OK, l'utilisateur a un CV → on laisse passer.
-
-  // Pas de CV → onboarding. Si les consentements RGPD requis sont déjà donnés,
-  // on saute l'écran de consentements et on va directement au placeholder upload.
   const consentsGiven = consents.value.cvProcessing && consents.value.dataTransferEu
-  return navigateTo(consentsGiven ? '/onboarding/upload-cv' : '/onboarding')
+  const target = decideCvRedirect({ hasCv: hasCv.value, consentsGiven })
+  return target ? navigateTo(target) : undefined
 })

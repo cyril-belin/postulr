@@ -69,12 +69,12 @@ variante dark automatique. Le toggle sera branché en F2 (color-mode).
 
 ---
 
-## 3. Primitives installées (F1 + F2)
+## 3. Primitives installées (F1 + F2 + F3)
 
-Six primitives (Button, Card, Input, Label en F1 ; Checkbox, Sonner en F2).
-Tout le reste du UI se compose à partir de celles-ci + des primitives ajoutées
-feature par feature (Chaque ajout via `npx shadcn-vue add <name>`, jamais écrit
-à la main).
+Huit primitives (Button, Card, Input, Label en F1 ; Checkbox, Sonner en F2 ;
+Progress, AlertDialog en F3). Tout le reste du UI se compose à partir de
+celles-ci + des primitives ajoutées feature par feature (chaque ajout via
+`npx shadcn-vue add <name>`, jamais écrit à la main).
 
 ### 3.1 `Button`
 
@@ -243,7 +243,44 @@ Last updated: 2026-07-10 (F2)
 
 **Pattern notes :** Toaster monté **une fois** au niveau racine (`app.vue`). Pour déclencher un toast depuis n'importe où : `import { toast } from 'vue-sonner'` puis `toast.success('...')` / `toast.error('...')`. Le composant fusionne `toastOptions` (props passées) avec les classes par défaut pour éviter le conflit de double binding. Couleurs via tokens sémantiques (popover, pas background).
 
-### 3.7 — Layouts & landing (propriétés de cohérence)
+### 3.7 — Progress (propriétés de cohérence)
+
+File: `app/components/ui/progress/Progress.vue`
+Last updated: 2026-07-10 (F3)
+
+| Property | Class |
+| --- | --- |
+| Background (track) | `bg-muted` |
+| Indicator | `bg-primary size-full flex-1 transition-all` |
+| Border radius | `rounded-full` |
+| Height | `h-1` (ciblé via prop `class`) |
+| Layout | `relative flex w-full items-center overflow-x-hidden` |
+
+**Pattern notes :** Reka UI `ProgressRoot`/`ProgressIndicator`. La valeur passe par `modelValue` (0–100). L'indicateur se déplace via `translateX(-${100 - value}%)`. Hauteur par défaut `h-1` (fine, pour feedback upload) — ajuster via `class`. Rayon `rounded-full`. `transition-all` pour une animation fluide.
+
+### 3.8 — AlertDialog (propriétés de cohérence)
+
+File: `app/components/ui/alert-dialog/` — `AlertDialog`, `AlertDialogTrigger`,
+`AlertDialogContent`, `AlertDialogHeader`, `AlertDialogFooter`, `AlertDialogTitle`,
+`AlertDialogDescription`, `AlertDialogAction`, `AlertDialogCancel`, `AlertDialogMedia`.
+Last updated: 2026-07-10 (F3)
+
+| Property | Class |
+| --- | --- |
+| Overlay | `bg-black/50` (data-[state=open]:animé) |
+| Content background | `bg-card` |
+| Content border/ring | `ring-1 ring-foreground/10` (cohérent avec Card) |
+| Content radius | `rounded-xl` |
+| Content spacing | `gap-4 p-6` |
+| Content max size | `max-w-md` |
+| Title | `text-lg font-medium` |
+| Description | `text-muted-foreground` |
+| Actions | `justify-end gap-2` (Footer) |
+| Animation | `data-[state=open]:animate-in ...` (tw-animate-css) |
+
+**Pattern notes :** Reka UI `AlertDialogRoot` (a11y native — focus trap, ESC, aria). Utilisé pour les **actions destructives/irréversibles** (confirmation re-upload CV). `AlertDialogAction` = bouton primaire (confirme), `AlertDialogCancel` = bouton secondaire (annule). Contenu centré via overlay. Rayon `rounded-xl` + ring `ring-foreground/10` cohérent avec Card. Le `v-model:open` permet un contrôle programmatique.
+
+### 3.9 — Layouts & landing (propriétés de cohérence)
 
 Files: `app/layouts/default.vue`, `app/layouts/auth.vue`, `app/pages/index.vue`, `app/error.vue`
 Last updated: 2026-07-10
@@ -266,8 +303,28 @@ Last updated: 2026-07-10
 
 ## 4. Composants métier
 
-*(Aucun en F1 — les composants métier arrivent feature par feature dans
-`app/components/<feature>/`, en composant les primitives ci-dessus.)*
+### 4.1 — CvUpload (propriétés de cohérence)
+
+File: `app/components/cv/CvUpload.vue`
+Last updated: 2026-07-10 (F3)
+
+| Property | Class |
+| --- | --- |
+| Background (zone) | transparent (hérite du Card parent) |
+| Border (dropzone) | `border border-dashed border-border` ; survol `hover:border-primary/50 hover:bg-accent` ; drag `border-primary bg-accent` |
+| Border radius | `rounded-lg` |
+| Spacing | `px-6 py-10` (dropzone) ; `gap-3` interne |
+| Text — primary | `text-sm font-medium` (instruction) |
+| Text — secondary | `text-xs text-muted-foreground` (contrainte PDF/5 Mo) |
+| Focus | `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring` |
+| Disabled (uploading) | `pointer-events-none opacity-60` |
+| Icon container | `size-10 rounded-full bg-muted` (icône centrée) |
+| Progress bar | primitive `Progress` `h-1` + `%` `text-xs tabular-nums text-muted-foreground` |
+| States | `Loader2 animate-spin` (uploading) / `Upload` (idle) |
+
+**Pattern notes :** Dropzone cliquable ET zone de drop. La garde UI (PDF/5 Mo) est pour le feedback immédiat — le contrôle de sécurité réel reste serveur (`onBeforeGenerateToken` via `allowedContentTypes`/`maximumSizeInBytes` appliqués par Blob). Icônes Lucide (`Upload`, `Loader2`). Émet `uploaded` en succès (le parent rafraîchit + redirige). Toasts via `vue-sonner` pour succès/erreur. N'utilise que des tokens (`border`, `primary`, `accent`, `muted`, `ring`) — aucune valeur ad hoc.
+
+**Section « Mes CV » du dashboard** (F3) : liste de versions dans une Card standard (ring `ring-foreground/10`, rayon `rounded-xl`). Chaque item = `border px-4 py-3 rounded-md` avec icône `FileText` dans `size-9 rounded-md bg-muted`. Badge de statut `rounded-full px-2 py-0.5 text-xs` (`bg-accent` pour parsed, `bg-muted` pour pending). Boutons de re-upload (AlertDialog confirmation) + téléchargement (icône `Download`).
 
 ---
 
@@ -291,3 +348,7 @@ Last updated: 2026-07-10
 - **2026-07-10 (F2)** — Primitives Checkbox + Sonner (toasts). Header default.vue
   enrichi (SignedIn/SignedOut + UserButton). Pages sign-in/sign-up/onboarding/
   onboarding/upload-cv/dashboard. Sonner monté dans app.vue.
+- **2026-07-10 (F3)** — Primitives Progress + AlertDialog. Premier composant
+  métier : `CvUpload.vue` (dropzone + progress + états). Dashboard enrichi
+  (section « Mes CV » : liste versions, re-upload avec confirmation, télécharge­
+  ment). Page onboarding/upload-cv réelle (remplace placeholder F2).

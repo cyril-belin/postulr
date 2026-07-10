@@ -1,0 +1,1 @@
+ALTER TABLE "documents" ADD CONSTRAINT "documents_blob_url_unique" UNIQUE("blob_url");
