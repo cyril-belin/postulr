@@ -1,7 +1,9 @@
 <script setup lang="ts">
 // Layout par défaut : header avec auth Clerk (F2) + slot.
-// `<SignedOut>` / `<SignedIn>` = API Nuxt documentée (doc Clerk vérifiée 2026-07-10 —
-// `<Show when=...>` est une primitive Next.js, inexistante en Nuxt).
+// `<Show when="signed-in">` / `<Show when="signed-out">` = primitive Clerk/Vue
+// vérifiée 2026-07-10 (inspection directe de @clerk/vue). ATTENTION :
+// `SignedIn`/`SignedOut` N'EXISTENT PAS en Clerk/Vue (c'est Clerk/React) —
+// seule `<Show>` est disponible, avec `when` + slot `#fallback`.
 // Le logout passe par le UserButton Clerk (natif).
 </script>
 
@@ -14,7 +16,7 @@
         </NuxtLink>
         <nav class="flex items-center gap-4 text-sm text-muted-foreground">
           <!-- Non connecté : boutons de connexion/inscription -->
-          <SignedOut>
+          <Show when="signed-out">
             <SignInButton as-child>
               <Button variant="ghost" size="sm">
                 Se connecter
@@ -25,11 +27,11 @@
                 Commencer
               </Button>
             </SignUpButton>
-          </SignedOut>
+          </Show>
           <!-- Connecté : menu utilisateur (logout natif) -->
-          <SignedIn>
+          <Show when="signed-in">
             <UserButton />
-          </SignedIn>
+          </Show>
         </nav>
       </div>
     </header>

@@ -9,5 +9,5 @@ useHead({
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
-  <Sonner />
+  <Toaster />
 </template>
