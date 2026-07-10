@@ -31,3 +31,4 @@ logs
 # Graphify (generated knowledge graph artifacts)
 graphify-out/
 .zcode/
+.playwright-mcp/
