@@ -2,6 +2,8 @@
 // Onboarding — upload CV (F3, remplace le placeholder F2).
 // CvUpload émet `uploaded` → on rafraîchit le profil (hasCv devient true) puis
 // on redirige vers /dashboard (le middleware cv-required est désormais satisfait).
+import { toast } from 'vue-sonner'
+
 definePageMeta({
   layout: 'default',
   middleware: ['auth'],
@@ -10,7 +12,6 @@ definePageMeta({
 useHead({ title: 'Importer votre CV — Postulr' })
 
 const { refresh, hasCv } = useCurrentUser()
-const { toast } = await import('vue-sonner')
 
 async function onUploaded() {
   // onUploadCompleted (webhook Blob) persiste hasCv=true côté serveur. On refresh

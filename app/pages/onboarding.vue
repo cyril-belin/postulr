@@ -1,6 +1,8 @@
 <script setup lang="ts">
 // Onboarding RGPD — consentements (F2 §2, SCOPING §3.6).
 // cv_processing + data_transfer_eu = requis ; marketing = optionnel.
+import { toast } from 'vue-sonner'
+
 definePageMeta({
   layout: 'default',
   middleware: ['auth'],
@@ -31,9 +33,8 @@ async function submit() {
         marketing: marketing.value,
       },
     })
-    // Sonner toast — import direct depuis vue-sonner (composant shadcn Sonner).
-    const { toast } = await import('vue-sonner')
     toast.success('Consentements enregistrés.')
+    // Redirection vers l'upload CV (F3).
     await navigateTo('/onboarding/upload-cv')
   } catch (e: unknown) {
     const msg = (e as { data?: { statusMessage?: string } })?.data?.statusMessage
