@@ -81,17 +81,20 @@ uniquement à la V1.
   Le CV est un objet relu/re-téléchargé → surveiller la courbe d'egress.
   **Seuil de bascule R2** : à définir quand l'egress mensuel dépasse le coût
   d'op d'un switch R2 (estimation : > 50€/mois d'egress).
-- **Visibilité des CV (décision à trancher en F3)** : un CV est une donnée
-  personnelle enrichie. Les URLs Vercel Blob `access: 'public'` sont
-  non-devinables mais accessibles sans auth à quiconque détient l'URL (fuite
-  possible dans un log, un historique navigateur, un partage d'écran). Vu la
-  rigueur RGPD du reste du doc, la posture cohérente est **Blob en accès privé
-  + URLs signées à courte durée servies via une route authentifiée** — mais
-  les capacités exactes de Vercel Blob en la matière (signed URLs, accès
-  privé, ADD réponse auth-gated) doivent être **vérifiées via la doc officielle
-  Vercel Blob au moment de F3** (pas de mémoire). Si la capacité privée n'est
-  pas disponible/suffisante, documenter alors explicitement l'acceptation du
-  résiduel dans ce SCOPING. Voir aussi point de vigilance §5.
+- **Visibilité des CV — DÉCISION ACTÉE (F3, vérif doc officielle 2026-07-10)** :
+  **Blob en accès PRIVÉ + URLs signées à courte durée** servies via route
+  authentifiée (`GET /api/cv/download`). Le `blobUrl` brut n'est JAMAIS renvoyé
+  au client. Capacité confirmée par la doc Vercel Blob : **Private Blob est GA**
+  (changelog « Vercel Private Blob is now generally available ») ; les lectures
+  passent par `issueSignedToken` + `presignUrl(operation: 'get')` qui délivrent
+  une URL signée à durée courte. Rationale : un CV est une PII sensible ; la
+  posture RGPD-strict du projet (consentements tracés en base §3.6) est
+  cohérente uniquement avec un stockage privé. **Prérequis infra** : le store
+  Blob doit être privé (souvent Vercel Pro) — à valider à l'intégration. La route
+  `/api/cv/download` restreint l'accès authentifié quel que soit le mode
+  (défense en profondeur). Doc de référence :
+  https://vercel.com/docs/vercel-blob/vercel-signed-urls ,
+  https://vercel.com/docs/vercel-blob/private-storage .
 
 ### 3.3 Schéma de données — Entités relationnelles
 
@@ -142,7 +145,12 @@ Les 4 obligations couvertes :
 4. **Conservation illimitée par défaut** + suppression immédiate à la demande.
 
 Table `consents` : `type` (`cv_processing` | `data_transfer_eu` | `marketing`),
-`grantedAt`, `ip`, `userId`.
+`grantedAt`, `ip`, `userId`. **DÉCISION idempotence (F3 — backlog F2 #1)** : la
+table est un **journal d'audit append-only** (PAS de contrainte unique
+`(userId, type)`). Chaque accord/retrait ajoute une ligne, préservant l'historique
+complet des consentements (exigence RGPD : démontrer qui a consenti à quoi et
+quand). La lecture de l'état courant prend la ligne la plus récente par type
+(cf. `/api/me` qui vérifie la présence d'au moins une ligne de ce type).
 
 ### 3.7 Job board — agrégation
 
@@ -266,7 +274,7 @@ applications       (userId, jobId, status, deepLink?, missingData jsonb,
 | Auto-apply qui soumet à tort | Triple-garde + review + vérification J+1, pas de retry auto |
 | RGPD droit à l'oubri incomplet | Job Inngest asynchrone en cascade, **squelette en F2, complété au fil des features au fur et à mesure que les entités qu'il touche existent (CV Blob en F3, applications en F7), test E2E en F10 avec le reste de la suite Playwright** |
 | Dédup imparfaite (doublons visibles job board) | Hash simple en V1 ; fuzzy reporté si doublons > seuil produit |
-| CV exposé via URL Blob publique | **Décision à trancher en F3** (cf §3.2) : Blob privé + URLs signées servies via route authentifiée (cohérent avec la rigueur RGPD du doc), vérifier la capacité exacte Vercel Blob via doc officielle au moment de F3 |
+| CV exposé via URL Blob publique | **Résolu en F3** (cf §3.2) : Blob privé + URLs signées courte durée servies via route authentifiée (`/api/cv/download`). Capacité confirmée doc officielle Vercel Blob (Private Blob GA) |
 
 ---
 

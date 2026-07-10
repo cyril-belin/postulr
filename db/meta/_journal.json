@@ -15,6 +15,20 @@
       "when": 1783709110007,
       "tag": "0001_brainy_clea",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1783714674756,
+      "tag": "0002_aromatic_warstar",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1783715693735,
+      "tag": "0003_strange_kingpin",
+      "breakpoints": true
     }
   ]
 }

@@ -1,11 +1,41 @@
 <script setup lang="ts">
-// Placeholder upload CV (F2). Le vrai upload arrive en F3 (Vercel Blob direct).
+// Onboarding — upload CV (F3, remplace le placeholder F2).
+// CvUpload émet `uploaded` → on rafraîchit le profil (hasCv devient true) puis
+// on redirige vers /dashboard (le middleware cv-required est désormais satisfait).
 definePageMeta({
   layout: 'default',
   middleware: ['auth'],
 })
 
 useHead({ title: 'Importer votre CV — Postulr' })
+
+const { refresh, hasCv } = useCurrentUser()
+const { toast } = await import('vue-sonner')
+
+async function onUploaded() {
+  // onUploadCompleted (webhook Blob) persiste hasCv=true côté serveur. On refresh
+  // le profil pour que le middleware cv-required laisse passer vers /dashboard.
+  // ⚠️ Il peut y avoir un court délai (webhook async) ; on retry une fois.
+  try {
+    await refresh()
+    if (!hasCv.value) {
+      // Le webhook n'est peut-être pas encore arrivé : on attend puis retry.
+      await new Promise((r) => setTimeout(r, 1500))
+      await refresh()
+    }
+  } catch {
+    // refresh peut échouer transitoirement ; on redirige quand même, le
+    // middleware réévaluera.
+  }
+
+  if (hasCv.value) {
+    toast.success('Redirection vers votre tableau de bord…')
+    await navigateTo('/dashboard')
+  } else {
+    // Le webhook tarde — on informe l'utilisateur sans bloquer.
+    toast.info('CV importé. Finalisation en cours, patientez quelques secondes puis rechargez.')
+  }
+}
 </script>
 
 <template>
@@ -20,13 +50,11 @@ useHead({ title: 'Importer votre CV — Postulr' })
     </div>
 
     <Card>
-      <CardContent class="flex flex-col items-center gap-4 py-10 text-center">
-        <p class="text-sm text-muted-foreground">
-          Le système d'import de CV arrive bientôt.
+      <CardContent class="flex flex-col gap-4 py-8">
+        <CvUpload @uploaded="onUploaded" />
+        <p class="text-center text-xs text-muted-foreground">
+          Vos données restent privées. Vous pouvez les supprimer à tout moment.
         </p>
-        <Button disabled>
-          Importer un CV (bientôt disponible)
-        </Button>
       </CardContent>
     </Card>
   </section>
