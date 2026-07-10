@@ -1,84 +1,134 @@
-# Memory — F1 Setup projet Postulr
+# Memory — F2 Auth Clerk + middleware gating (POST-REVIEW)
 
 Last updated: 2026-07-10
 
 ## What was built
 
-F1 (feature d'amorce) terminée — toutes les fondations que F2..F10 étendent.
+F2 (authentification Clerk + gating onboarding) terminée **ET review passée** —
+quality gate complet vert, 9 issues trouvées au review toutes corrigées.
 
-**Projet initialisé** sur Nuxt 4.4.8 (branche git `F1-setup-projet`, branche `main` = docs de cadrage). Repository précédemment vide (uniquement AGENTS.md/SCOPING.md/prompts/).
+**Dépendances:** `@clerk/nuxt@^2.6.15`, `svix@^1.96.1`, `vue-sonner@^2.0.9`.
+shadcn add: Checkbox, Sonner.
 
-**Stack & config racine :**
-- `nuxt.config.ts` — modules `shadcn-nuxt` + `@nuxt/eslint` ; Tailwind v4 via plugin `@tailwindcss/vite` ; `typescript.strict: true` ; `runtimeConfig` couvrant intégralement AGENTS.md §9 (12 clés privées + 2 publiques).
-- `drizzle.config.ts` — `dialect: 'postgresql'`, `out: './db'`, `schemaCasing: 'snake_case'`.
-- `vitest.config.ts` — environnement `nuxt` via `@nuxt/test-utils`.
-- `eslint.config.mjs` — flat config `withNuxt()` + override scopé `app/components/ui/**` (`vue/require-default-prop: off`, known-limitation linter vs pattern shadcn).
-- `.env.example` documente toutes les vars §9 (+ `NUXT_INNGEST_DEV`).
-- `.gitignore` — `.env`, `.nuxt`, `.output`, `node_modules` (migrations `db/` commitées).
+**Config & DB:**
+- `nuxt.config.ts`: module `@clerk/nuxt` + bloc `clerk` (redirections →
+  `/onboarding`). Champs = API Clerk SDK v3 (`signInFallbackRedirectUrl`/
+  `signUpFallbackRedirectUrl` — PAS les anciens `afterSignInUrl`).
+- Migration `db/0001_brainy_clea.sql`: `users.hasCv boolean notnull default false`
+  (appliquée Neon, vérifiée).
 
-**DB (Drizzle + Neon, driver neon-http serverless) :**
-- `server/schema/users.ts` — tables `users` (id text PK=Clerk, email unique, plan enum free/pro default free, stripeCustomerId?, billingCurrentPeriodEnd?, createdAt) + `consents` (id uuid defaultRandom, userId FK cascade, type enum cv_processing|data_transfer_eu|marketing, grantedAt, ip?) + index consents(userId). Enums via `pgEnum`.
-- `server/schema/index.ts` — barrel.
-- `server/utils/db/index.ts` — singleton `getDb()` (lazy init), auto-importé Nitro.
-- `db/0000_soft_marvex.sql` — migration initiale, **appliquée sur Neon** (tables + enums vérifiés en live).
+**Routes serveur (`server/api/`):**
+- `clerk/webhook.post.ts`: signature Svix (raw body `readRawBody`), 401 si
+  invalide. user.created/updated → upsert, user.deleted → job cascade. **Review
+  fix #6/#7**: user sans email → 200 ack (pas 400, anti retry-storm) ; DB errors
+  loggées + 500 pour retry Clerk.
+- `me.get.ts`: profil courant (plan, hasCv, consents).
+- `onboarding/consents.post.ts`: consentements RGPD Zod-validés, IP.
+- `account/delete.post.ts`: émet job cascade. **Review fix #8**: Inngest send
+  wrappé (503 si Inngest down, pas 500 générique).
+- `health.get.ts`: `{ ok: true }` (TODO F1 résolu).
+- `inngest.ts`: register delete-user-cascade.
 
-**Inngest placeholder :**
-- `server/utils/inngest/index.ts` — client singleton `getInngest()` (lazy init), `isDev` via runtimeConfig.
-- `server/api/inngest.ts` — `serve({ client, functions: [] })` via `inngest/nuxt`. Liste vide (boote sans crash).
+**Job:** `server/jobs/delete-user-cascade.ts` (squelette SCOPING §5).
 
-**Route de santé (conservée — voir Décisions) :**
-- `server/api/health.get.ts` — `{ ok: true, userCount }`.
+**App:**
+- `useCurrentUser.ts` SSR-safe. **Review fix #5**: pas de watchEffect (refresh
+  piloté explicitement par les middlewares/pages, évite double-fetch).
+- `middleware/auth.ts` (→ /sign-in), `middleware/cv-required.ts` (hasCv=false →
+  /onboarding). **Review fix #4**: refresh() wrappé try/catch (401 transitoire
+  SSR → redirect onboarding, pas crash).
+- Pages: sign-in, sign-up, onboarding (consentements), onboarding/upload-cv
+  (placeholder F3), dashboard (placeholder + suppression compte).
+- Header default.vue: SignedOut → boutons, SignedIn → UserButton. app.vue: Sonner.
 
-**App shell :**
-- `app/app.vue`, `app/error.vue` (Card shadcn), `app/layouts/default.vue` (header h-14 border-b + slot), `app/layouts/auth.vue` (centré), `app/pages/index.vue` (landing hero + CTA unique vers `/dashboard`, lien volontairement mort en F1).
+**Shared:** `shared/utils/schemas.ts` (Zod consentements, auto-importé).
 
-**UI (shadcn-vue, style `reka-nova`, base neutral, Reka UI + Lucide) :**
-- `app/components/ui/{button,card,input,label}/` — 4 primitives (Button 6 variants/8 sizes, Card +6 sous-composants, Input, Label) installées via CLI.
-- `app/assets/css/tailwind.css` — Tailwind v4 CSS-first, tokens `oklch` `:root`/`.dark`/`@theme inline`, `@custom-variant dark`.
-- `app/lib/utils.ts` — `cn()`.
-- `components.json` — aliases `@/components/ui`, css `app/assets/css/tailwind.css`.
-- `ui-registry.md` — registre initial complet (tokens + primitives + tableaux propriété-par-classe + layouts). **Mis à jour via `/imprint`.**
+**Tests:** 13/13 verts (webhook gardes + anti retry-storm, auth 401, cv-required
+logique, smoke).
 
-**Tests :** `test/smoke.test.ts` (valid harness Vitest+nuxt). 0 test métier.
+**README:** créé (section Configuration Clerk Dashboard).
+
+## Issues du review (TOUTES corrigées)
+
+Le review a remonté 9 issues (2 critical, 4 important, 3 minor), toutes
+corrigées + quality gate re-passé :
+- **#6 CRITICAL** — webhook 400 sur user sans email → retry-storm infinie.
+  Fix: 200 ack (`ignored: 'no-email'`), l'event user.updated arrivera plus tard.
+- **#7 CRITICAL** — erreurs DB webhook silencieuses (500 sans log). Fix: try/catch
+  + console.error, 500 pour retry Clerk.
+- **#4 IMPORTANT** — cv-required middleware: refresh() pouvait throw (401 SSR
+  transitoire) → middleware crash. Fix: try/catch → redirect onboarding.
+- **#8 IMPORTANT** — account/delete Inngest send non wrappé → 500 générique.
+  Fix: try/catch → 503 clair.
+- **#2/#3/#5 MINOR** — commentaire webhook trompeur, typo "touuche", watchEffect
+  double-fetch. Fixés.
 
 ## Decisions made
 
-- **Health route conservée** (déviante du prompt F1 qui disait « créer puis supprimer »). Actée avec le dev. Devient le healthcheck prod (Vercel). **Documentée ici comme périmètre volontaire.**
-- **`/imprint` et `/review` passés** avant déclaration F1 terminée (obligatoires AGENTS §8).
-- **Périmètre = non négociable.** Le prompt définit le scope ; tout ajout hors-périmètre passe par une question AVANT, pas une justification après. Un CTA `/jobs` avait été ajouté « pour le réalisme » dans le hero → retiré sur ce principe. Message installé pour F2+.
-- **Anti-patterns = non négociables, zéro exception.** `process.env` direct en code serveur est interdit (AGENTS §10), même avec une « bonne excuse ». Appliqué strictement dès F1.
-- **Singletons serveur (`db`, `inngest`) en lazy init** via getter (`getDb()`/`getInngest()`), pas export module-level — car `useRuntimeConfig()` au moment de l'import du module (boot Nitro) renvoie des valeurs non-hydratées.
-- **shadcn-vue installe Tailwind v4 CSS-first** (pas de `tailwind.config.ts`). Format = ce que la CLI écrit, non modifié.
+- **`<SignedIn>`/`<SignedOut>` et NON `<Show>`**: `<Show>` est une primitive
+  Next.js. API Nuxt documentée = `<SignedIn>`/`<SignedOut>` (slot, sans props).
+- **API Clerk SDK v3 = renommages**: `afterSignInUrl` → `signInFallbackRedirectUrl`.
+  `event.context.auth()` est une FONCTION.
+- **Tests server routes = logique pure**: l'environnement Nuxt Vitest ne sert pas
+  les routes serveur via `$fetch` (404). Vrai test d'intégration = `setup()` de
+  @nuxt/test-utils (boot serveur complet, lourd). Choix: tests de la logique de
+  garde. **L'intégration Clerk complète = test E2E Playwright en F10**.
+- **Webhook sémantique codes de retour** (acté au review): 401=signature
+  invalide (pas de retry), 200=ack (même ignoré, crucial pour anti retry-storm),
+  500=erreur transitoire (retry attendu, loggé).
+- **Webhook = raw body obligatoire**: `readRawBody(event)`.
+- **Ordre AGENTS §8 NON NÉGOCIABLE**: le /remember save est TOUJOURS en dernier,
+  après /review. (Inversion corrigée cette session.)
 
 ## Problems solved
 
-- **`nuxi init` ne copie rien dans un dossier non-vide** → init dans `/tmp/postulr-init` puis fusion manuelle (en préservant AGENTS.md/SCOPING.md/prompts/).
-- **Imports Drizzle Postgres** : `pgTable`/`pgEnum`/`text`/`uuid`/`timestamp`/`index` viennent de `drizzle-orm/pg-core` (PAS de la racine `drizzle-orm`). Erreur initiale `pgEnum is not a function` → corrigée.
-- **`drizzle-kit` charge `.env` lui-même** ; le shell `source .env` casse sur les URLs avec `&` (`sslmode=require&...`). Pour vérifs DB en CLI, parser `.env` en node.
-- **`@nuxt/test-utils` environnement `nuxt` nécessite `happy-dom`** (pas jsdom) — sinon `Could not resolve "happy-dom"`.
-- **Inngest dev mode — gotcha clé (NE PAS RE-SOUDRE) :**
-  - L'erreur `"In cloud mode but no signing key found"` venait de `config.inngestDev === '1'` qui était `false`.
-  - Cause : **Nuxt/`untyped` coercent `NUXT_INNGEST_DEV=1` en number au runtime** bien que le type généré soit `string`. `1 === '1'` → false → `isDev` forcé à `false` (boolean) → mode cloud exigé.
-  - Fix : `isDev: String(config.inngestDev) === '1'` (normalisation string). **+ lazy init du client** (`getInngest()`) car le module-level boot lit runtimeConfig trop tôt.
-  - Le serve handler `serve()` ne prend PAS d'option `isDev`/`dev` — le mode vient uniquement du client `new Inngest({ isDev })`.
-- **`vue/require-default-prop` warnings sur composants shadcn générés** → override ESLint scopé plutôt que d'éditer les fichiers générés (AGENTS §4.1 : ne pas modifier la CLI output).
+- **vitest "Missing publishableKey"**: environnement Nuxt boot le plugin client
+  Clerk. Fix: charger `.env` dans `vitest.config.ts` via `dotenv.config()`.
+- **Composant Sonner généré TS2783** (toastOptions double binding). Fix:
+  `computed(mergedToastOptions)`. Déviation mineure §4.1 AGENTS (bug généré).
+- **Inngest v4 `createFunction`**: `(options, handler)`, options = `{id,
+  triggers:[{event}], retries}`.
+- **ModuleOptions Clerk**: champs de redirection via PluginOptions ⊃
+  IsomorphicClerkOptions ⊃ ClerkOptions. Vérifier via `.d.ts`, pas mémoire.
 
 ## Current state
 
-- **Quality gate FULL VERT après les 3 fixes du review :** `nuxt typecheck` ✓ (0 erreur), `eslint .` ✓ (0 erreur, **0 warning**), `vitest run` ✓ (1/1), `nuxt build` ✓.
-- **Live vérifié :** `GET /` → 200 (landing, CTA unique), `GET /api/health` → `{"ok":true,"userCount":0}`, `GET /api/inngest` → 200 (dev mode OK, headers SDK présents).
-- **DB Neon :** migration appliquée (tables `users`/`consents`, enums `plan`/`consent_type`, 1 migration tracée).
-- **`.env`** contient `NUXT_DATABASE_URL`, `NUXT_INNGEST_DEV=1`, `NUXT_PUBLIC_APP_URL`, et des clés Clerk de test (publishable + secret, mode test) déjà posées par le dev pour F2.
-- **Pas encore committé sur la branche F1** (les fichiers sont unstaged).
+- **Quality gate FULL VERT post-review:** typecheck ✓, eslint ✓ (0 warning),
+  vitest 13/13 ✓, build ✓.
+- **Graph régénéré** (`/graphify .`): 248 nœuds, 266 edges, 46 communities.
+- **Live vérifié:** `/`, `/sign-in`, `/sign-up` → 200 ; `/api/health` → `{"ok":true}`
+  ; `/api/me` + `/api/account/delete` sans auth → 401 ; webhook sans svix → 401
+  ; `/dashboard` sans auth → 302 `/sign-in`.
+- **Branche `F2-auth-clerk`**: commits faits, **non mergée sur main** (dev
+  décide PR vs merge direct).
+- **DB Neon:** migration 0001 appliquée (has_cv).
+- **`.env`**: clés Clerk test présentes. **À renseigner**:
+  `NUXT_CLERK_WEBHOOK_SECRET` (depuis Dashboard Clerk).
 
 ## Next session starts with
 
-1. **`/remember restore`** (recharger ce mémoire).
-2. **Committer F1** sur la branche `F1-setup-projet` puis merger vers `main` (ou PR) — au choix du dev.
-3. **Démarrer F2 (Auth Clerk)** → lire `prompts/F2-auth-clerk.md`. Premier sous-objectif : installer `@clerk/nuxt`, brancher le plugin client `clerk.client.ts`, créer le middleware `auth.ts` + `cv-required.ts`, écrans sign-in/sign-up (layout `auth.vue`), et **protéger le dashboard** (le CTA `/dashboard` devient fonctionnel).
+1. **`/remember restore`**.
+2. **MERGE F2**: décider PR vs merge direct vers main. Branche `F2-auth-clerk`
+   prête, review passé, quality gate vert.
+3. **⚠️ PRÉREQUIS F3 (manuel, bloquant)** — à faire AVANT de démarrer F3 :
+   - **(a) Configuration Clerk Dashboard** (README § "Configuration Clerk
+     Dashboard"): providers Google/email, endpoint webhook
+     `https://postulr.online/api/clerk/webhook`, events `user.created/updated/
+     deleted`, récupérer `NUXT_CLERK_WEBHOOK_SECRET` → `.env`.
+   - **(b) Test signup réel**: créer un compte via l'UI en local (avec tunnel
+     webhook) → valider que la ligne `users` apparaît en base (upsert via
+     webhook). **Sans webhook, les users Clerk ne sont pas créés en DB** → F3
+     ne peut pas fonctionner.
+   - **(c) Décision RGPD Vercel Blob** à trancher en ouverture F3 (SCOPING §3.2
+     + §5): Blob privé + URLs signées servies via route authentifiée (cohérent
+     rigueur RGPD) vs Blob public (résiduel accepté). Vérifier capacité Blob
+     privé via doc officielle Vercel Blob au moment de F3.
+4. **Démarrer F3 (Upload CV + storage)** → lire `prompts/F3-*.md`.
 
-## Open questions / TODO pour F2
+## Open questions / TODO pour F3+
 
-- **F2 — PROTÉGER `/api/health`** : la route est actuellement publique et expose `userCount`. Une fois Clerk en place, soit la mettre derrière auth, soit la limiter à un healthcheck sans donnée (ex. `{ ok: true }` sans le count). **TODO explicite, marqué dans `server/api/health.get.ts`.**
-- Vérifier au démarrage de F2 : la commande exacte d'install de `@clerk/nuxt` + l'API `event.context.auth()` (FONCTION, pas propriété — AGENTS §5.1) via doc Clerk Nuxt, pas mémoire.
-- Le squelette du job `delete-user-cascade` (RGPD) est prévu en F2 per SCOPING §5 — à créer vide puis compléter au fil des features.
+- **Tests routes serveur** = logique pure pour l'instant. Envisager `setup()`
+  quand le volume de routes augmente, ou à F10 (Playwright).
+- Le job `delete-user-cascade` est un squelette : compléter CV Blob (F3) +
+  anonymisation applications (F7).
+- Composant Sonner modifié (TS2783 fix) — déviation mineure §4.1 documentée.

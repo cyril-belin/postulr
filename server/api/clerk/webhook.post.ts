@@ -13,6 +13,16 @@ import { users } from '#server/schema/users'
  * authentifiés par signature Svix, pas par session Clerk (le serveur Clerk n'a
  * pas de session). Le secret vient de `NUXT_CLERK_WEBHOOK_SECRET`
  * (runtimeConfig — jamais `process.env` direct, AGENTS §5.1).
+ *
+ * ⚠️ Sémantique des codes de retour (review F2) :
+ *   - 401 = signature invalide/manquante → Clerk ne retry PAS (échec définitif,
+ *     c'est attendu pour un faux webhook).
+ *   - 200 = event accusé réception (même si on l'ignore). CRUCIAL : un user sans
+ *     email (OAuth incomplet, email non vérifié) doit renvoyer 200 et non 400,
+ *     sinon Clerk retry en boucle jusqu'à épuisement. L'event user.updated
+ *     arrivera quand l'email sera défini.
+ *   - 500 = erreur transitoire (DB injoignable) → Clerk retry (attendu). L'erreur
+ *     est loggée pour observabilité, pas silencieuse.
  */
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig(event)
@@ -54,34 +64,50 @@ export default defineEventHandler(async (event) => {
     // (on ne réinitialise pas le plan sur un update — il est géré par Clerk Billing en F10).
     const email = data.email_addresses.find((e) => e.id === data.primary_email_address_id)?.email_address
       ?? data.email_addresses[0]?.email_address
+
+    // Pas d'email = OAuth incomplet ou email non vérifié. On accuse réception
+    // (200) sans écrire : Clerk renverra user.updated quand l'email sera posé.
+    // Un 400 déclencherait une retry storm infinie (review F2 issue #6).
     if (!email) {
-      throw createError({ statusCode: 400, statusMessage: 'No email on user' })
+      return { received: true, ignored: 'no-email' }
     }
-    await db
-      .insert(users)
-      .values({
-        id: data.id,
-        email,
-        plan: 'free',
-      })
-      .onConflictDoUpdate({
-        target: users.id,
-        set: { email }, // on ne touuche PAS à plan/hasCv sur update
-      })
+
+    try {
+      await db
+        .insert(users)
+        .values({
+          id: data.id,
+          email,
+          plan: 'free',
+        })
+        .onConflictDoUpdate({
+          target: users.id,
+          set: { email }, // on ne touche PAS à plan/hasCv sur update
+        })
+    } catch (err) {
+      // Erreur DB (Neon injoignable, contrainte violée) → 500 pour que Clerk
+      // retry. On logge pour observabilité (review F2 issue #7).
+      console.error('[webhook] DB error on user upsert', { userId: data.id, error: err })
+      throw createError({ statusCode: 500, statusMessage: 'DB error' })
+    }
     return { received: true }
   }
 
   if (payload.type === 'user.deleted') {
     // RGPD droit à l'oubli (SCOPING §3.6) — job Inngest en cascade.
-    // F2 : squelette (delete users + consents seulement ; CV Blob en F3,
-    // applications en F7). On déclenche le job + on hard-delete user
-    // (le cascade FK supprime les consents).
+    // On déclenche UNIQUEMENT le job (le hard-delete user + consents se fait
+    // dans le job, pas ici). CV Blob en F3, applications en F7.
     const userId = data.id
     if (userId) {
-      await getInngest().send({
-        name: 'delete-user-cascade',
-        data: { userId },
-      })
+      try {
+        await getInngest().send({
+          name: 'delete-user-cascade',
+          data: { userId },
+        })
+      } catch (err) {
+        console.error('[webhook] Inngest send error on user.deleted', { userId, error: err })
+        throw createError({ statusCode: 500, statusMessage: 'Job dispatch error' })
+      }
     }
     return { received: true }
   }

@@ -4,8 +4,12 @@
  *
  * - L'auth vient de Clerk (`useAuth`/`useUser` — auto-importés par @clerk/nuxt).
  * - Le profil DB (plan, hasCv, consents) vient de GET /api/me via useFetch
- *   (évite le double-fetch SSR+hydration — AGENTS §5.3). On ne déclenche le
- *   fetch que si l'utilisateur est authentifié (sinon 401 inutile).
+ *   (évite le double-fetch SSR+hydration — AGENTS §5.3).
+ *
+ * (review F2 issue #5) : pas de watchEffect auto-refresh — le refresh est
+ * piloté explicitement par les middlewares/pages qui en ont besoin (ex.
+ * cv-required.ts après auth). Ça évite les double-fetch et les race conditions
+ * entre watchEffect et refresh() explicite.
  */
 interface ConsentsState {
   cvProcessing: boolean
@@ -31,21 +35,12 @@ export const useCurrentUser = () => {
   const { isSignedIn } = useAuth()
   const { user } = useUser()
 
-  // Fetch du profil DB — seulement si authentifié. `key` unique pour le cache
-  // useAsyncData (partagé entre tous les appelants du composable).
+  // Fetch du profil DB. `key` unique pour le cache useAsyncData (partagé entre
+  // tous les appelants du composable). `immediate: false` — on ne fetch qu'à la
+  // demande (middleware/pages appellent refresh() après auth confirmée).
   const { data, refresh } = useFetch<MeResponse>('/api/me', {
     key: 'current-user',
-    // On ne fetch pas tant que Clerk n'a pas confirmé l'auth (isLoaded && isSignedIn).
     immediate: false,
-  })
-
-  // Déclencher le fetch réactivement quand l'utilisateur devient authentifié.
-  // Gardé simple : le middleware/pages appellent refresh() explicitement quand
-  // nécessaire (ex. après onboarding).
-  watchEffect(() => {
-    if (isSignedIn.value && !data.value) {
-      refresh()
-    }
   })
 
   const plan = computed(() => data.value?.plan ?? 'free')

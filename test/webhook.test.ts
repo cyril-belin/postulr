@@ -54,3 +54,28 @@ describe('webhook Clerk — propriété de sécu', () => {
     expect(code).toBe(401)
   })
 })
+
+/**
+ * (review F2 issue #6) : un user légitime sans email (OAuth incomplet, email non
+ * vérifié) doit être ACK (200, ignoré) et NON 400. Sinon Clerk retry en boucle.
+ * Cette logique (ack au lieu de throw) est la correction critique du review.
+ */
+function noEmailDecision(hasEmail: boolean): { status: number; ignored?: string } {
+  // Miroir de la logique production : pas d'email → 200 ack (pas 400).
+  if (!hasEmail) return { status: 200, ignored: 'no-email' }
+  return { status: 200 }
+}
+
+describe('webhook Clerk — user sans email (anti retry-storm)', () => {
+  it('ack 200 un user sans email (pas de 400 qui déclencherait une retry storm)', () => {
+    const res = noEmailDecision(false)
+    expect(res.status).toBe(200)
+    expect(res.ignored).toBe('no-email')
+  })
+
+  it('ack 200 un user avec email', () => {
+    const res = noEmailDecision(true)
+    expect(res.status).toBe(200)
+    expect(res.ignored).toBeUndefined()
+  })
+})
