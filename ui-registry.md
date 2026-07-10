@@ -1,0 +1,254 @@
+# ui-registry.md — Registre UI Postulr
+
+> **Registre vivant des composants UI** (AGENTS.md §6). Source de vérité unique
+> pour "qu'est-ce qui existe déjà". À consulter **avant** de créer un composant.
+> Mis à jour par le skill `/imprint` après chaque création/modification de
+> composant UI.
+
+---
+
+## 1. Stack UI
+
+- **shadcn-nuxt** (module Nuxt) + **shadcn-vue** (CLI) — base `reka-nova`,
+  lib d'icônes **Lucide**, primitives **Reka UI** (successeur de Radix Vue).
+- **Tailwind CSS v4** — config **CSS-first** (aucun `tailwind.config.ts`).
+  Le design system vit dans `app/assets/css/tailwind.css`.
+- **Police** : Geist Sans (chargée via Google Fonts dans le CSS).
+- Tout composant métier va dans `app/components/<feature>/` et compose les
+  primitives ci-dessous. **Interdiction d'inventer un composant hors registre**
+  (AGENTS.md §4.1).
+- Alias d'import : `@/components/ui`, `@/lib/utils`. La primitive `cn()` vit
+  dans `app/lib/utils.ts`.
+- Répertoire auto-importé par le module shadcn-nuxt : `~/components/ui`.
+
+---
+
+## 2. Design tokens
+
+Format **Tailwind v4 CSS-first** : valeurs `oklch(...)` dans `:root` (light) et
+`.dark` (dark mode via classe `.dark` sur `<html>`), exposées à Tailwind via la
+directive `@theme inline` sous forme de `--color-*`.
+
+> ⚠️ **Ne pas utiliser `hsl(var(--...))`** (pattern Tailwind v3 obsolète). Les
+> tokens s'utilisent directement via les utilitaires Tailwind sémantiques :
+> `bg-background`, `text-foreground`, `border-border`, `text-primary`, etc.
+
+Base color : **neutral** (nuances grises pures, L variable).
+
+| Token (utility) | `:root` (light) | `.dark` | Rôle |
+|---|---|---|---|
+| `background` | `oklch(1 0 0)` | `oklch(0.145 0 0)` | Fond de page |
+| `foreground` | `oklch(0.145 0 0)` | `oklch(0.985 0 0)` | Texte par défaut |
+| `card` | `oklch(1 0 0)` | `oklch(0.205 0 0)` | Fond de carte |
+| `card-foreground` | `oklch(0.145 0 0)` | `oklch(0.985 0 0)` | Texte de carte |
+| `popover` | `oklch(1 0 0)` | `oklch(0.205 0 0)` | Fond de popover/menu |
+| `popover-foreground` | `oklch(0.145 0 0)` | `oklch(0.985 0 0)` | Texte popover |
+| `primary` | `oklch(0.205 0 0)` | `oklch(0.922 0 0)` | Action principale |
+| `primary-foreground` | `oklch(0.985 0 0)` | `oklch(0.205 0 0)` | Texte sur primary |
+| `secondary` | `oklch(0.97 0 0)` | `oklch(0.269 0 0)` | Action secondaire |
+| `secondary-foreground` | `oklch(0.205 0 0)` | `oklch(0.985 0 0)` | Texte sur secondary |
+| `muted` | `oklch(0.97 0 0)` | `oklch(0.269 0 0)` | Fond discret |
+| `muted-foreground` | `oklch(0.556 0 0)` | `oklch(0.708 0 0)` | Texte discret |
+| `accent` | `oklch(0.97 0 0)` | `oklch(0.269 0 0)` | Survol / sélection |
+| `accent-foreground` | `oklch(0.205 0 0)` | `oklch(0.985 0 0)` | Texte sur accent |
+| `destructive` | `oklch(0.577 0.245 27.325)` | `oklch(0.704 0.191 22.216)` | Erreur / suppression |
+| `border` | `oklch(0.922 0 0)` | `oklch(1 0 0 / 10%)` | Bordures |
+| `input` | `oklch(0.922 0 0)` | `oklch(1 0 0 / 15%)` | Bordure de champ |
+| `ring` | `oklch(0.708 0 0)` | `oklch(0.556 0 0)` | Anneau de focus |
+
+### Rayons (tokens `--radius-*`)
+
+`--radius: 0.625rem` (défaut). Dérivés : `--radius-sm` (−4px), `--radius-md`
+(−2px), `--radius-lg` (= radius), `--radius-xl` (+4px). Utiliser `rounded-md`,
+`rounded-lg`, etc. — **jamais de rayon ad hoc** (AGENTS.md §4.2).
+
+### Dark mode
+
+Géré par la classe `.dark` sur `<html>` (convention shadcn). Les tokens ont une
+variante dark automatique. Le toggle sera branché en F2 (color-mode).
+
+---
+
+## 3. Primitives installées (F1)
+
+Quatre primitives posées en F1. Tout le reste du UI se compose à partir de
+celles-ci + des primitives ajoutées feature par feature (Chaque ajout via
+`npx shadcn-vue add <name>`, jamais écrit à la main).
+
+### 3.1 `Button`
+
+`app/components/ui/button/` — exposable via `import { Button } from '@/components/ui/button'`
+(auto-importé dans les `.vue`).
+
+Variants (`variant`) : `default` (primary), `outline`, `secondary`, `ghost`,
+`destructive`, `link`.
+
+Sizes (`size`) : `default` (h-8), `xs`, `sm`, `lg`, `icon`, `icon-xs`,
+`icon-sm`, `icon-lg`.
+
+Props notables : `as` (défaut `button`), `as-child` (hérite de `PrimitiveProps`
+Reka UI — passe le rendu à l'élément enfant, pratique pour wrapper un
+`NuxtLink` tout en gardant le style bouton).
+
+```vue
+<Button>Default</Button>
+<Button variant="outline" size="lg">Outline</Button>
+<Button variant="destructive">Supprimer</Button>
+<!-- Rendu en <a>/<NuxtLink> avec le style bouton : -->
+<Button as-child>
+  <NuxtLink to="/dashboard">Commencer</NuxtLink>
+</Button>
+```
+
+### 3.2 `Card` (+ 6 sous-composants)
+
+`app/components/ui/card/` — `Card`, `CardHeader`, `CardTitle`,
+`CardDescription`, `CardAction`, `CardContent`, `CardFooter`.
+
+Structure standard : `Card > [CardHeader (CardTitle, CardDescription, CardAction?)] > CardContent > CardFooter`.
+
+Prop `size` sur `Card` : `default` | `sm`.
+
+```vue
+<Card class="max-w-md">
+  <CardHeader>
+    <CardTitle>Titre</CardTitle>
+    <CardDescription>Sous-titre discret</CardDescription>
+  </CardHeader>
+  <CardContent>Corps de la carte.</CardContent>
+  <CardFooter class="justify-end gap-2">
+    <Button variant="outline">Annuler</Button>
+    <Button>Confirmer</Button>
+  </CardFooter>
+</Card>
+```
+
+### 3.3 `Input`
+
+`app/components/ui/input/` — `<Input v-model="value" />`. Hauteur h-8, bordure
+`input`, focus `ring`. Gestion `modelValue` + `update:modelValue` (vueuse
+`useVModel`, passive). Supporte `aria-invalid` (bordure/anneau `destructive`).
+
+### 3.4 `Label`
+
+`app/components/ui/label/` — `<Label for="x">Texte</Label>`. Hérite `LabelProps`
+Reka UI (a11y native). Text-sm medium, gère l'état disabled du peer.
+
+---
+
+### 3.1.1 — Button (propriétés de cohérence)
+
+File: `app/components/ui/button/Button.vue`
+Last updated: 2026-07-10
+
+| Property | Class |
+| --- | --- |
+| Background | `bg-primary` (default) / `bg-secondary` / `bg-background` (outline) / `bg-muted` (ghost hover) |
+| Border | `border-transparent` (default) / `border-border` (outline) |
+| Border radius | `rounded-lg` |
+| Text — primary | `text-primary-foreground` (default) / `text-foreground` (outline/ghost) |
+| Text size | `text-sm` |
+| Text weight | `font-medium` |
+| Spacing (default size) | `h-8 gap-1.5 px-2.5` |
+| Hover | variant-specific (`hover:bg-muted`, `[a]:hover:bg-primary/80`, ...) |
+| Focus | `focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3` |
+| Active | `active:not-aria-[haspopup]:translate-y-px` |
+| Shadow | none |
+| Disabled | `disabled:pointer-events-none disabled:opacity-50` |
+
+**Pattern notes :** Un seul rayon — `rounded-lg`. Focus toujours `ring-3` sur le token `ring`. Les boutons icône utilisent les sizes `icon*` (carré). `as-child` pour wrapper un `NuxtLink` en gardant le style. Ne pas override ces classes.
+
+### 3.2.1 — Card (propriétés de cohérence)
+
+File: `app/components/ui/card/Card.vue` (+ CardHeader, CardTitle, CardDescription, CardContent, CardFooter, CardAction)
+Last updated: 2026-07-10
+
+| Property | Class |
+| --- | --- |
+| Background | `bg-card` |
+| Text | `text-card-foreground` (conteneur) / `text-sm` (base) |
+| Border/ring | `ring-1 ring-foreground/10` (pas de `border-*`, c'est un ring) |
+| Border radius | `rounded-xl` (carte) / `rounded-t-xl` (header avec image) |
+| Spacing | `gap-4 py-4` (default) / `gap-3 py-3` (size=sm) ; header `px-4 gap-1` |
+| Shadow | none |
+| Accent usage | none par défaut |
+
+**Pattern notes :** Les cartes utilisent un **ring** (`ring-foreground/10`), pas une bordure — à respecter pour toute surface "card-like". Rayon `rounded-xl`. Sous-composants : `CardHeader` (grid, `gap-1 px-4`), `CardTitle`, `CardDescription` (`text-muted-foreground`), `CardContent` (`px-4`), `CardFooter` (`px-4`, souvent `justify-end gap-2`). Prop `size` : `default` | `sm`.
+
+### 3.3.1 — Input (propriétés de cohérence)
+
+File: `app/components/ui/input/Input.vue`
+Last updated: 2026-07-10
+
+| Property | Class |
+| --- | --- |
+| Background | `bg-transparent` (`dark:bg-input/30`) |
+| Border | `border-input` |
+| Border radius | `rounded-lg` |
+| Text | `text-base md:text-sm` ; `placeholder:text-muted-foreground` |
+| Spacing | `h-8 px-2.5 py-1` |
+| Focus | `focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:ring-3` |
+| Invalid | `aria-invalid:border-destructive aria-invalid:ring-destructive/20` |
+| Disabled | `disabled:bg-input/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50` |
+| Width | `w-full min-w-0` |
+
+**Pattern notes :** Hauteur `h-8` (alignée sur Button size default). Toujours `w-full min-w-0`. Focus `ring-3` cohérent avec Button. `modelValue` via `useVModel` (passive).
+
+### 3.4.1 — Label (propriétés de cohérence)
+
+File: `app/components/ui/label/Label.vue`
+Last updated: 2026-07-10
+
+| Property | Class |
+| --- | --- |
+| Text | `text-sm font-medium leading-none` |
+| Layout | `flex items-center gap-2 select-none` |
+| Disabled | `peer-disabled:opacity-50 group-data-[disabled=true]:opacity-50` |
+
+**Pattern notes :** Reka UI `Label` (a11y native). Toujours `text-sm font-medium`. S'associe au peer (Input) pour l'état disabled.
+
+### 3.5 — Layouts & landing (propriétés de cohérence)
+
+Files: `app/layouts/default.vue`, `app/layouts/auth.vue`, `app/pages/index.vue`, `app/error.vue`
+Last updated: 2026-07-10
+
+| Property | Class |
+| --- | --- |
+| Page background | `bg-background text-foreground` |
+| Header border | `border-b` (séparateur header) |
+| Container | `mx-auto max-w-6xl px-6` (header) / `max-w-3xl` (landing hero) / `max-w-md`/`max-w-sm` (centré) |
+| Header height | `h-14` |
+| Hero titre | `text-4xl font-bold tracking-tight sm:text-5xl` |
+| Hero sous-titre | `text-lg text-muted-foreground` |
+| Eyebrow | `text-sm font-medium text-muted-foreground` |
+| Section spacing | `py-24` (hero centré) |
+| Focus ring global | `outline-ring/50` (base layer) |
+
+**Pattern notes :** Trois largeurs de container à utiliser selon contexte : `max-w-6xl` (app pleine largeur), `max-w-3xl` (contenu éditorial/hero), `max-w-sm`/`max-w-md` (centré auth/error). Le header fait toujours `h-14 border-b`. Titres en `tracking-tight`. Texte discret = `text-muted-foreground` — jamais de couleur ad hoc.
+
+---
+
+## 4. Composants métier
+
+*(Aucun en F1 — les composants métier arrivent feature par feature dans
+`app/components/<feature>/`, en composant les primitives ci-dessus.)*
+
+---
+
+## 5. Layouts
+
+| Layout | Fichier | Usage |
+|---|---|---|
+| `default` | `app/layouts/default.vue` | Header minimal (logo + nav placeholder) + `<slot/>`. Pages publiques & app. |
+| `auth` | `app/layouts/auth.vue` | Centré max-w-sm + `<slot/>`. Futurs écrans Clerk (F2). |
+
+`app/app.vue` : `<NuxtLayout><NuxtPage/></NuxtLayout>`.
+`app/error.vue` : page d'erreur globale (Card shadcn + bouton retour).
+
+---
+
+## 6. Historique
+
+- **2026-07-10 (F1)** — Initialisation. Tokens neutral + Tailwind v4 CSS-first
+  + primitives Button, Card (+6), Input, Label. Layouts default + auth. Landing
+  `pages/index.vue`.
