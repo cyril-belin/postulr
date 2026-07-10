@@ -1,16 +1,16 @@
 import { serve } from 'inngest/nuxt'
 import { getInngest } from '#server/utils/inngest'
+import { makeDeleteUserCascade } from '#server/jobs/delete-user-cascade'
 
 /**
  * Endpoint unique Inngest (AGENTS.md §5.6).
  *
- * En F1 : `functions: []` — placeholder valide qui boote sans crash et
- * register zéro fonction. Les premières fonctions arrivent en F3/F5.
- *
- * Le client est résolu via `getInngest()` au moment de la requête (lazy init)
- * pour s'assurer que la runtimeConfig est hydratée.
+ * F2 : register le job `delete-user-cascade` (RGPD). Les fonctions sont créées
+ * via `getInngest().createFunction(...)` au moment de la requête (lazy init du
+ * client — la runtimeConfig doit être hydratée).
  */
 export default defineEventHandler((event) => {
   const client = getInngest()
-  return serve({ client, functions: [] })(event)
+  const functions = [makeDeleteUserCascade()]
+  return serve({ client, functions })(event)
 })

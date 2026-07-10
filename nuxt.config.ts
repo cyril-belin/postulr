@@ -5,7 +5,19 @@ export default defineNuxtConfig({
   compatibilityDate: '2025-07-15',
   devtools: { enabled: true },
 
-  modules: ['shadcn-nuxt', '@nuxt/eslint'],
+  modules: ['shadcn-nuxt', '@clerk/nuxt', '@nuxt/eslint'],
+
+  // Clerk (doc vérifiée 2026-07-10 — @clerk/nuxt auto-configure middleware +
+  // plugins + composants auto-importés : SignedIn/SignedOut/UserButton/SignIn...).
+  // Clés lues depuis runtimeConfig (vars d'env NUXT_*_CLERK_* déjà posées en F1).
+  // Redirections post-auth → onboarding (le vrai upload CV arrive en F3).
+  // Noms de champs = API Clerk SDK v3 (signUpFallbackRedirectUrl, etc.).
+  clerk: {
+    signInUrl: '/sign-in',
+    signUpUrl: '/sign-up',
+    signInFallbackRedirectUrl: '/onboarding',
+    signUpFallbackRedirectUrl: '/onboarding',
+  },
 
   // Tailwind v4 — CSS-first config, no tailwind.config.ts.
   css: ['~/assets/css/tailwind.css'],

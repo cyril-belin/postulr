@@ -27,3 +27,8 @@ logs
 
 # Drizzle
 # (migrations in db/ ARE committed)
+
+# Graphify (generated knowledge graph artifacts)
+graphify-out/
+.zcode/
+.playwright-mcp/

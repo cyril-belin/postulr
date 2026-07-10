@@ -1,4 +1,4 @@
-import { index, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { boolean, index, pgEnum, pgTable, text, timestamp, uuid } from 'drizzle-orm/pg-core'
 
 // --- Enums partagés (cf AGENTS.md §7) ---
 
@@ -17,6 +17,9 @@ export const users = pgTable('users', {
   id: text('id').primaryKey(),
   email: text('email').notNull().unique(),
   plan: planEnum('plan').notNull().default('free'),
+  // F2 : gating onboarding. Le vrai upload CV arrive en F3, qui passera ce
+  // flag à true. Pas de dépendance à la table documents (elle n'existe qu'en F3).
+  hasCv: boolean('has_cv').notNull().default(false),
   stripeCustomerId: text('stripe_customer_id'),
   billingCurrentPeriodEnd: timestamp('billing_current_period_end', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

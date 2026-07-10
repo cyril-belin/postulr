@@ -1,6 +1,8 @@
 <script setup lang="ts">
-// Layout par défaut : header minimal + slot.
-// La nav sera enrichie feature par feature (auth en F2, dashboard en F6...).
+// Layout par défaut : header avec auth Clerk (F2) + slot.
+// `<SignedOut>` / `<SignedIn>` = API Nuxt documentée (doc Clerk vérifiée 2026-07-10 —
+// `<Show when=...>` est une primitive Next.js, inexistante en Nuxt).
+// Le logout passe par le UserButton Clerk (natif).
 </script>
 
 <template>
@@ -11,8 +13,23 @@
           Postulr
         </NuxtLink>
         <nav class="flex items-center gap-4 text-sm text-muted-foreground">
-          <span class="hidden sm:inline">Aide</span>
-          <span class="hidden sm:inline">Tarifs</span>
+          <!-- Non connecté : boutons de connexion/inscription -->
+          <SignedOut>
+            <SignInButton as-child>
+              <Button variant="ghost" size="sm">
+                Se connecter
+              </Button>
+            </SignInButton>
+            <SignUpButton as-child>
+              <Button size="sm">
+                Commencer
+              </Button>
+            </SignUpButton>
+          </SignedOut>
+          <!-- Connecté : menu utilisateur (logout natif) -->
+          <SignedIn>
+            <UserButton />
+          </SignedIn>
         </nav>
       </div>
     </header>
