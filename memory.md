@@ -6,7 +6,7 @@ Last updated: 2026-07-10
 
 F2 (auth Clerk + gating onboarding) terminée, **review interne passé (9 issues
 corrigées) + corrections d'une review externe (3 points) appliquées**. Branche
-`F2-auth-clerk` prête pour PR.
+`F2-auth-clerk` **mergée sur main** (PR #1 squash-merge, branche supprimée).
 
 Voir les commits détaillés pour le détail de F2 (auth, webhook, middlewares,
 pages, onboarding RGPD, job delete-user-cascade squelette). Récap rapide :
@@ -70,15 +70,14 @@ auth/cv-required, `users.hasCv` (migration 0001).
   (0 warning), vitest 13/13 ✓, build ✓.
 - **Graph régénéré** (`/graphify .`): 278 nœuds, 281 edges, 51 communities.
 - **Live vérifié:** Geist rendue correctement (Playwright getComputedStyle).
-- **Branche `F2-auth-clerk`**: prête, **non mergée**. Push + PR à faire (ne PAS
-  merger — PR part en review externe).
+  Routes auth catch-all vérifiées (sso-callback 200, plus de 404).
+- **F2 mergée sur main** (PR #1, commit `3815bd7`). Branche `F2-auth-clerk`
+  supprimée (locale + remote).
 
 ## Next session starts with
 
 1. **`/remember restore`**.
-2. **MERGE F2**: la PR `F2-auth-clerk` → `main` part en review externe. Attendre
-   validation externe avant merge.
-3. **⚠️ PRÉREQUIS F3 (manuel, bloquant)** — à faire AVANT de démarrer F3 :
+2. **⚠️ PRÉREQUIS F3 (manuel, bloquant)** — à faire AVANT de démarrer F3 :
    - **(a) Configuration Clerk Dashboard** (README § "Configuration Clerk
      Dashboard"): providers Google/email, endpoint webhook
      `https://postulr.online/api/clerk/webhook`, events `user.created/updated/
@@ -95,9 +94,19 @@ auth/cv-required, `users.hasCv` (migration 0001).
 
 ## Open questions / TODO pour F3+
 
-- Tests routes serveur = logique pure. Envisager `setup()` @nuxt/test-utils
-  quand le volume augmente, ou Playwright F10.
+- **Tests routes serveur = logique pure (backlog important)** : les tests webhook/
+  account-delete/cv-required testent des fonctions pures extraites, PAS le vrai
+  code des handlers. Couverture réelle faible. Envisager `setup()` @nuxt/test-utils
+  (boot serveur → `$fetch` sur les vraies routes) quand le volume augmente, ou
+  Playwright F10 pour les flux auth complets.
+- **Idempotence consents à trancher en F3** : `POST /api/onboarding/consents`
+  insère une nouvelle ligne `consents` à chaque appel (re-submit onboarding =
+  doublons). Décider en F3 : upsert/unique(userId,type) ou insertion append-only
+  (audit trail) ? Selon le besoin RGPD (historique des consentements vs dernier
+  état). Actuellement append-only sans contrainte unique.
 - Job `delete-user-cascade` squelette: compléter CV Blob (F3) + applications (F7).
 - Composant Sonner modifié (TS2783 fix) — déviation mineure §4.1 documentée.
 - **Pas de plugin Clerk manuel** — règle à respecter en F2+ (le module
   s'auto-configure).
+- **Routes auth = catch-all Nuxt `[...rest].vue`** (PAS `[[...rest]]` qui est
+  Next.js) — sous dossiers `sign-in/` et `sign-up/` pour les sous-routes Clerk.
