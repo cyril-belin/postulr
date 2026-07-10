@@ -26,7 +26,14 @@ export default defineNuxtConfig({
   },
 
   // shadcn-nuxt — registers the `app/components/ui/` directory for auto-import.
+  // ⚠️ prefix: '' OBLIGATOIRE — sans ça, shadcn-nuxt préfixe tous les composants
+  // avec "Ui" (UiButton, UiCheckbox...) au lieu de Button, Checkbox. Les
+  // templates utilisent <Button>, <Card>, <Checkbox> sans préfixe (convention
+  // shadcn-vue). Ce bug rendait TOUS les composants ui invisibles (custom
+  // elements non résolus) — découvert via l'onboarding F3 où les checkboxes
+  // n'apparaissaient pas.
   shadcn: {
+    prefix: '',
     componentDir: '~/components/ui',
   },
 
